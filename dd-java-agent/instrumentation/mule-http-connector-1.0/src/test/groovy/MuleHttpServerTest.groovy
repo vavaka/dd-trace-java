@@ -77,7 +77,7 @@ class MuleHttpServerTest extends HttpServerTest<HttpServer> {
 
   @Override
   String expectedOperationName() {
-    return "mule.http.server"
+    return "http.request"
   }
 
   @Override
