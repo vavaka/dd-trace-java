@@ -187,6 +187,7 @@ abstract class HttpServerTest<SERVER> extends AgentTestRunner {
   }
 
   static <T> T controller(ServerEndpoint endpoint, Closure<T> closure) {
+    println "request span should be active at this point"
     assert activeSpan() != null: "Controller should have a parent span."
     assert activeScope().asyncPropagating: "Scope should be propagating async."
     if (endpoint == NOT_FOUND) {

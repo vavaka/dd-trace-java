@@ -2,15 +2,11 @@ package datadog.trace.instrumentation.mulehttpconnector.client;
 
 import com.ning.http.client.AsyncCompletionHandler;
 import com.ning.http.client.AsyncHandler;
-import com.ning.http.client.FluentCaseInsensitiveStringsMap;
 import com.ning.http.client.Request;
 import datadog.trace.bootstrap.InstrumentationContext;
 import datadog.trace.bootstrap.instrumentation.api.AgentScope;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
 import net.bytebuddy.asm.Advice;
-
-import java.util.Arrays;
-import java.util.List;
 
 import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.activateSpan;
 import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.propagate;
@@ -25,6 +21,7 @@ public class ClientRequestAdvice {
       @Advice.This final Object source,
       @Advice.Argument(0) final Request request,
       @Advice.Argument(1) final AsyncHandler<?> handler) {
+    System.out.println("start executeRequest");
     final AgentSpan span = startSpan("http.request");
     final AgentScope scope = activateSpan(span, false);
 
@@ -35,5 +32,6 @@ public class ClientRequestAdvice {
     InstrumentationContext.get(AsyncCompletionHandler.class, AgentSpan.class)
         .put((AsyncCompletionHandler) handler, span);
     scope.close();
+    System.out.println("end executeRequest");
   }
 }

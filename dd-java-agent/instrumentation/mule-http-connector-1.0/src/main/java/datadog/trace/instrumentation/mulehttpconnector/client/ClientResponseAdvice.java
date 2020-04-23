@@ -34,6 +34,7 @@ public class ClientResponseAdvice {
       DECORATE.beforeFinish(span);
       span.finish();
     }
+    System.out.println("end onComplete in AsyncHandler");
     scope.close();
   }
 }
