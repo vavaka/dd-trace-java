@@ -16,6 +16,9 @@ jar {
 
 dependencies {
   compile group: 'org.springframework.boot', name: 'spring-boot-starter-web', version: '1.5.18.RELEASE'
+  compile group: 'com.datadoghq', name: 'dd-trace-api', version: '0.50.0'
+  compile group: 'io.opentracing', name: 'opentracing-util', version: '0.33.0'
+
 
   testCompile project(':dd-smoke-tests')
 }

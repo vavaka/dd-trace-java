@@ -102,7 +102,10 @@ public abstract class AgentTestRunner extends DDSpecification {
             return result;
           }
         };
-    TEST_TRACER = CoreTracer.builder().writer(TEST_WRITER).build();
+    TEST_TRACER =
+        CoreTracer.builder()
+            //      .writer(TEST_WRITER)
+            .build();
     GlobalTracerUtils.registerOrReplaceGlobalTracer((CoreTracer) TEST_TRACER);
   }
 

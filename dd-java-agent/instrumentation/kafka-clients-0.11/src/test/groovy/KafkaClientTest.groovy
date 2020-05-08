@@ -1,5 +1,7 @@
 import datadog.trace.agent.test.AgentTestRunner
+import datadog.trace.api.DDTags
 import datadog.trace.bootstrap.instrumentation.api.Tags
+import datadog.trace.core.DDSpan
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.consumer.KafkaConsumer
@@ -18,6 +20,9 @@ import org.springframework.kafka.test.utils.KafkaTestUtils
 
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
+
+import static datadog.trace.agent.test.utils.TraceUtils.runUnderTrace
+import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.activeSpan
 
 class KafkaClientTest extends AgentTestRunner {
   static final SHARED_TOPIC = "shared.topic"
@@ -56,8 +61,19 @@ class KafkaClientTest extends AgentTestRunner {
     container.setupMessageListener(new MessageListener<String, String>() {
       @Override
       void onMessage(ConsumerRecord<String, String> record) {
-        TEST_WRITER.waitForTraces(1) // ensure consistent ordering of traces
+        runUnderTrace("sleeping") {
+          Thread.sleep(5)
+        }
+//        TEST_WRITER.waitForTraces(1) // ensure consistent ordering of traces
         records.add(record)
+
+        DDSpan span = activeSpan()
+        final String requestTime = span.getBaggageItem("request.received");
+        if (requestTime != null) {
+          final long startTime = Long.parseLong(requestTime);
+          final long endTime = System.currentTimeMillis();
+          span.setTag("request.processing.ms", endTime - startTime);
+        }
       }
     })
 
@@ -69,8 +85,19 @@ class KafkaClientTest extends AgentTestRunner {
 
     when:
     String greeting = "Hello Spring Kafka Sender!"
-    kafkaTemplate.send(SHARED_TOPIC, greeting)
+    runUnderTrace("test.trace") {
+      runUnderTrace("sleeping") {
+        Thread.sleep(5)
+      }
+      activeSpan().setTag(DDTags.ANALYTICS_SAMPLE_RATE, 1.0d)
+      ((DDSpan) activeSpan()).localRootSpan.setBaggageItem("request.received", "${TimeUnit.NANOSECONDS.toMillis(((DDSpan) activeSpan()).localRootSpan.startTime)}")
 
+      kafkaTemplate.send(SHARED_TOPIC, greeting)
+
+      runUnderTrace("blocking") {
+        blockUntilChildSpansFinished(2)
+      }
+    }
 
     then:
     // check that the message was received
@@ -79,18 +106,29 @@ class KafkaClientTest extends AgentTestRunner {
     received.key() == null
 
     assertTraces(2) {
-      trace(0, 1) {
-        // PRODUCER span 0
+      trace(0, 2) {
         span(0) {
+          serviceName "unnamed-java-app"
+          operationName "parent"
+          resourceName "parent"
+          parent()
+          tags {
+            "some time" String
+            defaultTags()
+          }
+        }
+        // PRODUCER span 0
+        span(1) {
           serviceName "kafka"
           operationName "kafka.produce"
           resourceName "Produce Topic $SHARED_TOPIC"
           spanType "queue"
           errored false
-          parent()
+          childOf(span(0))
           tags {
             "$Tags.COMPONENT" "java-kafka"
             "$Tags.SPAN_KIND" Tags.SPAN_KIND_PRODUCER
+            "some time" String
             defaultTags()
           }
         }
@@ -103,12 +141,13 @@ class KafkaClientTest extends AgentTestRunner {
           resourceName "Consume Topic $SHARED_TOPIC"
           spanType "queue"
           errored false
-          childOf TEST_WRITER[0][0]
+          childOf TEST_WRITER[0][1]
           tags {
             "$Tags.COMPONENT" "java-kafka"
             "$Tags.SPAN_KIND" Tags.SPAN_KIND_CONSUMER
+            "some time" String
             "partition" { it >= 0 }
-            "offset" 0
+            "offset" "0"
             defaultTags(true)
           }
         }
@@ -117,8 +156,8 @@ class KafkaClientTest extends AgentTestRunner {
 
     def headers = received.headers()
     headers.iterator().hasNext()
-    new String(headers.headers("x-datadog-trace-id").iterator().next().value()) == "${TEST_WRITER[0][0].traceId}"
-    new String(headers.headers("x-datadog-parent-id").iterator().next().value()) == "${TEST_WRITER[0][0].spanId}"
+    new String(headers.headers("x-datadog-trace-id").iterator().next().value()) == "${TEST_WRITER[0][1].traceId}"
+    new String(headers.headers("x-datadog-parent-id").iterator().next().value()) == "${TEST_WRITER[0][1].spanId}"
 
     cleanup:
     producerFactory.stop()
