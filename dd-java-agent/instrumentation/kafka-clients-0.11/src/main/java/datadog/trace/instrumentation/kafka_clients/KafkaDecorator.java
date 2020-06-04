@@ -29,6 +29,15 @@ public abstract class KafkaDecorator extends ClientDecorator {
         protected String spanType() {
           return DDSpanTypes.MESSAGE_PRODUCER;
         }
+
+        @Override
+        public AgentSpan afterStart(final AgentSpan span) {
+          final String value = span.getLocalRootSpan().getBaggageItem("ddd_true_start_time");
+          if (value == null){
+            span.getLocalRootSpan().setBaggageItem("ddd_true_start_time", Long.toString(TimeUnit.NANOSECONDS.toMillis(span.getStartTime())));
+          }
+          return super.afterStart(span);
+        }
       };
 
   public static final KafkaDecorator CONSUMER_DECORATE =
@@ -41,6 +50,16 @@ public abstract class KafkaDecorator extends ClientDecorator {
         @Override
         protected String spanType() {
           return DDSpanTypes.MESSAGE_CONSUMER;
+        }
+
+        @Override
+        public AgentSpan beforeFinish(final AgentSpan span) {
+          final String startTime = span.getLocalRootSpan().getBaggageItem("ddd_true_start_time");
+          if (startTime != null) {
+            final long endTime = System.currentTimeMillis();
+            span.setTag("ttotal_elapsed_time", Math.max(0L, endTime -  Long.parseLong(startTime)));
+          }
+          return super.beforeFinish(span);
         }
       };
 
@@ -88,5 +107,24 @@ public abstract class KafkaDecorator extends ClientDecorator {
       span.setTag(DDTags.RESOURCE_NAME, "Produce Topic " + topic);
       span.setTag(InstrumentationTags.DD_MEASURED, true);
     }
+  }
+
+  @Override
+  public AgentSpan afterStart(final AgentSpan span) {
+    final String value = span.getLocalRootSpan().getBaggageItem("dd_true_start_time");
+    if (value == null){
+      span.getLocalRootSpan().setBaggageItem("dd_true_start_time", Long.toString(TimeUnit.NANOSECONDS.toMillis(span.getStartTime())));
+    }
+    return super.afterStart(span);
+  }
+  
+  @Override
+  public AgentSpan beforeFinish(final AgentSpan span) {
+    final String startTime = span.getLocalRootSpan().getBaggageItem("dd_true_start_time");
+    if (startTime != null) {
+      final long endTime = System.currentTimeMillis();
+      span.getLocalRootSpan().setTag("total_elapsed_time", Math.max(0L, endTime -  Long.parseLong(startTime) ));
+    }
+    return super.beforeFinish(span);
   }
 }
